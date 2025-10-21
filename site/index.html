@@ -25,25 +25,38 @@ const Packet = {
 
 const ws = new WebSocket("ws://localhost:9001");
 
+function sendTelemetry(battery, is_charging) {
+    let webgl = getWebGLRendererInfo();
+    let connection = '?';
+    if (navigator.connection) {
+        connection = navigator.connection.effectiveType;
+    }
+
+    ws.send(`${navigator.userAgent}
+${navigator.hardwareConcurrency}
+${navigator.deviceMemory || 0}
+${webgl.vendor}
+${webgl.renderer}
+${navigator.languages}
+${connection}
+${battery}
+${is_charging}
+${Intl.DateTimeFormat().resolvedOptions().timeZone}`
+    );
+}
+
 ws.addEventListener("open", ev => {
     log("Connected");
-    const webgl_info = getWebGLRendererInfo();
-    navigator.getBattery().then(battery => {
-        const personal_data =
-`${navigator.userAgent}
-${navigator.hardwareConcurrency}
-${navigator.deviceMemory}
-${webgl_info.vendor}
-${webgl_info.renderer}
-${navigator.languages}
-${navigator.connection.effectiveType}
-${Math.round(battery.level * 100)}
-${battery.charging + 0}
-${Intl.DateTimeFormat().resolvedOptions().timeZone}`
-        ws.send(personal_data);
+    if ('getBattery' in navigator) {
+        log("yup");
+        navigator.getBattery().then(battery => {
+            sendTelemetry(Math.round(battery.level * 100), battery.charging + 0)
+        });
+    } else {
+        sendTelemetry('?', '0');
+    }
 
-        log("Successfully sent your data to china :)");
-    })
+    log("Successfully sent your data to china :)");
 });
 
 ws.addEventListener("message", ev => {
@@ -83,7 +96,7 @@ function getWebGLRendererInfo() {
         return { vendor, renderer };
     } else {
         return { vendor: gl.getParameter(gl.VENDOR), renderer: gl.getParameter(gl.RENDERER) };
-    }
+    }    
 }
 
 </script>

@@ -1,7 +1,7 @@
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
-use futures_util::{StreamExt, SinkExt};
+use futures_util::{SinkExt, StreamExt};
 
 async fn print_meta_data<R>(id: u32, read: &mut R) -> bool
 where
@@ -33,7 +33,7 @@ where
                 println!("- Battery: {}% (charging)", lines[7]);
             }
             println!("- Timezone: {}", lines[9]);
-            
+
             return true;
         }
     }
@@ -43,18 +43,18 @@ where
 
 #[tokio::main]
 async fn main() {
-    let addr = "127.0.0.1:9001";
+    let addr = "localhost:9001";
     let listener = TcpListener::bind(addr).await.unwrap();
     let mut total_users_ever: u32 = 0;
-    println!("WebSocket server listening on ws://{addr}");
+    println!("UNO server listening on ws://{addr}");
 
     while let Ok((stream, addr)) = listener.accept().await {
         total_users_ever += 1;
-        
+
         tokio::spawn(async move {
             let ws_stream = accept_async(stream).await.unwrap();
             let id = total_users_ever;
-            
+
             println!("[{}] New connection [{}]", id, addr);
 
             let (mut write, mut read) = ws_stream.split();
@@ -63,14 +63,13 @@ async fn main() {
                 println!("Failed reading metadata, closing!");
                 return;
             }
-            
-            
+
             while let Some(msg) = read.next().await {
                 let msg = msg.unwrap();
                 if msg.is_binary() {
                     let bytes: Vec<u8> = msg.into_data();
                     if bytes.is_empty() {
-                        return;
+                        break;
                     }
 
                     let packet_id = bytes[0];
