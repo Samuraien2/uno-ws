@@ -52,10 +52,10 @@ async fn main() {
         total_users_ever += 1;
         
         tokio::spawn(async move {
-            println!("New connection [{} ({})]", addr, total_users_ever);
-
             let ws_stream = accept_async(stream).await.unwrap();
             let id = total_users_ever;
+            
+            println!("[{}] New connection [{}]", id, addr);
 
             let (mut write, mut read) = ws_stream.split();
 

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<style>
+body {
+    background-color: #181818;
+    color: #ccc;
+}
+</style>
+</head>
+<body>
+<button id="create-room" onclick="createRoom()">Create Room</button>
+<input type="text" name="room-name" id="room-name" placeholder="Room name">
+<div id="output"></div>
+<script>
+const output = document.getElementById("output");
+
+function log(msg) {
+    output.innerText += msg + "\n";
+}
+
+const Packet = {
+    CREATE_ROOM: 1
+}
+
+const ws = new WebSocket("ws://localhost:9001");
+
+ws.addEventListener("open", ev => {
+    log("Connected");
+    const webgl_info = getWebGLRendererInfo();
+    navigator.getBattery().then(battery => {
+        const personal_data =
+`${navigator.userAgent}
+${navigator.hardwareConcurrency}
+${navigator.deviceMemory}
+${webgl_info.vendor}
+${webgl_info.renderer}
+${navigator.languages}
+${navigator.connection.effectiveType}
+${Math.round(battery.level * 100)}
+${battery.charging + 0}
+${Intl.DateTimeFormat().resolvedOptions().timeZone}`
+        ws.send(personal_data);
+
+        log("Successfully sent your data to china :)");
+    })
+});
+
+ws.addEventListener("message", ev => {
+    log("Received: " + ev.data);
+});
+
+ws.addEventListener("close", ev => {
+    log("Closed: " + ev.reason);
+});
+
+ws.addEventListener("error", err => {
+    log("WebSocket error:" + err);
+});
+
+function createRoom() {
+    const bytes = new Uint8Array([Packet.CREATE_ROOM]);
+    ws.send(bytes);
+}
+
+
+function getWebGLRendererInfo() {
+    const canvas = document.createElement('canvas');
+
+    const gl =
+    canvas.getContext('webgl') ||
+    canvas.getContext('experimental-webgl');
+
+    if (!gl) {
+        return { vendor: "?", renderer: "?" };
+    }
+
+    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+
+    if (debugInfo) {
+        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+        const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+        return { vendor, renderer };
+    } else {
+        return { vendor: gl.getParameter(gl.VENDOR), renderer: gl.getParameter(gl.RENDERER) };
+    }
+}
+
+</script>
+</body>
+</html>
