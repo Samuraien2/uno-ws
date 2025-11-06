@@ -5,7 +5,7 @@ use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
 use futures_util::{SinkExt, StreamExt};
 
-async fn print_meta_data<R>(id: u32, read: &mut R) -> bool
+async fn read_metadata<R>(id: u32, read: &mut R) -> bool
 where
     R: futures_util::Stream<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin,
 {
@@ -72,7 +72,7 @@ async fn main() {
 
             let (mut write, mut read) = ws_stream.split();
 
-            if !print_meta_data(id, &mut read).await {
+            if !read_metadata(id, &mut read).await {
                 println!("Failed reading metadata, closing!");
                 return;
             }
