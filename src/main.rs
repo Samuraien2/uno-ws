@@ -1,3 +1,5 @@
+use std::{sync::Arc};
+use tokio::sync::Mutex;
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
@@ -41,19 +43,30 @@ where
     false
 }
 
+#[allow(dead_code)]
+struct Room {
+    name: String,
+    users: Vec<u32>,
+}
+
 #[tokio::main]
 async fn main() {
     let addr = "localhost:9001";
     let listener = TcpListener::bind(addr).await.unwrap();
-    let mut total_users_ever: u32 = 0;
-    println!("UNO server listening on ws://{addr}");
+    let mut total_users_ever = 0;
+    println!("Listening on ws://{addr}");
+
+    let rooms: Arc<Mutex<Vec<Room>>> = Arc::new(Mutex::new(Vec::new()));
 
     while let Ok((stream, addr)) = listener.accept().await {
         total_users_ever += 1;
+        let id = total_users_ever;
+        let rooms = Arc::clone(&rooms);
 
         tokio::spawn(async move {
             let ws_stream = accept_async(stream).await.unwrap();
-            let id = total_users_ever;
+
+            let mut room = 0;
 
             println!("[{}] New connection [{}]", id, addr);
 
@@ -64,6 +77,8 @@ async fn main() {
                 return;
             }
 
+            write.send(Message::Text(id.to_string())).await.unwrap();
+
             while let Some(msg) = read.next().await {
                 let msg = msg.unwrap();
                 if msg.is_binary() {
@@ -73,14 +88,34 @@ async fn main() {
                     }
 
                     let packet_id = bytes[0];
+                    let packet_len = bytes.len();
                     if packet_id == 1 {
-                        println!("[{}] CREATE ROOM!", id);
-                    }
-                    write.send(Message::Text("Creating room".to_string())).await.unwrap();
+                        if room > 0 {
+                            println!("[{}] O_o Tried creating room while in room", id);
+                            continue;
+                        }
+
+                        if packet_len == 1 {
+                            println!("[{}] O_o No name supplied", id);
+                            continue;
+                        }
+                        
+                        let slice = &bytes[1..];
+                        let s = String::from_utf8_lossy(slice).into_owned();
+
+                        println!("[{}] Created room: {}", id, s);
+                        let mut rooms_lock = rooms.lock().await;
+                        let len = rooms_lock.len() + 1;
+                        rooms_lock.push(Room {
+                            name: s,
+                            users: vec![id]
+                        });
+
+                        room = len;
+                    }    
                 }
             }
-
-            println!("Connection closed");
+            println!("[{}] Connection closed", id);
         });
     }
 }
