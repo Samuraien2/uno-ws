@@ -1,8 +1,8 @@
 use std::{sync::Arc};
 use tokio::sync::Mutex;
 use tokio::net::TcpListener;
-use tokio_tungstenite::accept_async;
-use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::{accept_async};
+use tokio_tungstenite::tungstenite::{Message};
 use futures_util::{SinkExt, StreamExt};
 
 async fn print_meta_data<R>(id: u32, read: &mut R) -> bool
@@ -77,12 +77,12 @@ async fn main() {
                 return;
             }
 
-            write.send(Message::Text(id.to_string())).await.unwrap();
+            write.send(Message::text(id.to_string())).await.unwrap();
 
             while let Some(msg) = read.next().await {
                 let msg = msg.unwrap();
                 if msg.is_binary() {
-                    let bytes: Vec<u8> = msg.into_data();
+                    let bytes = msg.into_data();
                     if bytes.is_empty() {
                         break;
                     }
