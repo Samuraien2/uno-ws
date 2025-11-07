@@ -1,17 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<style>
-body {
-    background-color: #181818;
-    color: #ccc;
-}
-</style>
-</head>
-<body>
-<button id="create-room" onclick="createRoom()">Create Room</button>
-<input type="text" name="room-name" id="room-name" placeholder="Room name">
-<div id="output"></div>
-<script src="script.js"></script>
-</body>
+    <head>
+        <style>
+            body {
+                background-color: #181818;
+                color: #ccc;
+            }
+        </style>
+    </head>
+    <body>
+        <button id="create-room" onclick="createRoom()">Create Room</button>
+        <input type="text" id="create-room-name" placeholder="Room name" />
+        <br />
+        <button id="join-room" onclick="joinRoom()">Join Room</button>
+        <input type="text" id="join-room-name" placeholder="Room name" />
+        <div id="output"></div>
+        <script src="script.js"></script>
+    </body>
 </html>

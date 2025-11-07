@@ -1,9 +1,9 @@
-use std::{sync::Arc};
-use tokio::sync::Mutex;
+use futures_util::{SinkExt, StreamExt};
+use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
-use futures_util::{SinkExt, StreamExt};
 
 async fn read_metadata<R>(id: u32, read: &mut R) -> bool
 where
@@ -22,19 +22,21 @@ where
             }
 
             println!("[{}] Metadata:", id);
-            println!("- User agent: {}", lines[0]);
-            println!("- CPU Cores: {}", lines[1]);
-            println!("- Memory: {}gb", lines[2]);
-            println!("- WebGL Vendor: {}", lines[3]);
-            println!("- WebGL Renderer: {}", lines[4]);
-            println!("- Languages: {}", lines[5]);
-            println!("- Connection: {}", lines[6]);
-            if lines[8] == "0" {
-                println!("- Battery: {}% (not charging)", lines[7]);
-            } else {
-                println!("- Battery: {}% (charging)", lines[7]);
+            if false {
+                println!("- User agent: {}", lines[0]);
+                println!("- CPU Cores: {}", lines[1]);
+                println!("- Memory: {}gb", lines[2]);
+                println!("- WebGL Vendor: {}", lines[3]);
+                println!("- WebGL Renderer: {}", lines[4]);
+                println!("- Languages: {}", lines[5]);
+                println!("- Connection: {}", lines[6]);
+                if lines[8] == "0" {
+                    println!("- Battery: {}% (not charging)", lines[7]);
+                } else {
+                    println!("- Battery: {}% (charging)", lines[7]);
+                }
+                println!("- Timezone: {}", lines[9]);
             }
-            println!("- Timezone: {}", lines[9]);
 
             return true;
         }
@@ -42,6 +44,8 @@ where
 
     false
 }
+
+async fn packet_receive() {}
 
 #[allow(dead_code)]
 struct Room {
@@ -68,12 +72,12 @@ async fn main() {
 
             let mut room = 0;
 
-            println!("[{}] New connection [{}]", id, addr);
+            println!("[{id}] New connection [{addr}]");
 
             let (mut write, mut read) = ws_stream.split();
 
             if !read_metadata(id, &mut read).await {
-                println!("Failed reading metadata, closing!");
+                println!("[{id}] Failed reading metadata, closing!");
                 return;
             }
 
@@ -91,31 +95,47 @@ async fn main() {
                     let packet_len = bytes.len();
                     if packet_id == 1 {
                         if room > 0 {
-                            println!("[{}] O_o Tried creating room while in room", id);
+                            println!("[{id}] O_o Tried creating room while in room");
                             continue;
                         }
 
                         if packet_len == 1 {
-                            println!("[{}] O_o No name supplied", id);
+                            println!("[{id}] O_o Tried creating empty room");
                             continue;
                         }
-                        
+
                         let slice = &bytes[1..];
                         let s = String::from_utf8_lossy(slice).into_owned();
 
-                        println!("[{}] Created room: {}", id, s);
+                        println!("[{id}] Created room: {s}");
                         let mut rooms_lock = rooms.lock().await;
                         let len = rooms_lock.len() + 1;
                         rooms_lock.push(Room {
                             name: s,
-                            users: vec![id]
+                            users: vec![id],
                         });
 
                         room = len;
-                    }    
+                    }
+                    if packet_id == 2 {
+                        if room > 0 {
+                            println!("[{id}] O_o Tried joining room while in room");
+                            continue;
+                        }
+
+                        if packet_len == 1 {
+                            println!("[{id}] O_o Tried joining empty room");
+                            continue;
+                        }
+
+                        let slice = &bytes[1..];
+                        let s = String::from_utf8_lossy(slice).into_owned();
+
+                        println!("[{id}] Joined room: {s}");
+                    }
                 }
             }
-            println!("[{}] Connection closed", id);
+            println!("[{id}] Connection closed");
         });
     }
 }
