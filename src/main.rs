@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio_tungstenite::accept_async;
-use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::{Bytes, Message};
 
 async fn read_metadata<R>(id: u32, read: &mut R) -> bool
 where
@@ -45,7 +45,58 @@ where
     false
 }
 
-async fn packet_receive() {}
+async fn packet_receive(
+    id: u32,
+    room: &mut u32,
+    bytes: Bytes,
+    rooms: &Arc<Mutex<Vec<Room>>>,
+) -> bool {
+    let packet_id = bytes[0];
+    let packet_len = bytes.len();
+    if packet_id == 1 {
+        if *room > 0 {
+            println!("[{id}] O_o Tried creating room while in room");
+            return false;
+        }
+
+        if packet_len == 1 {
+            println!("[{id}] O_o Tried creating empty room");
+            return false;
+        }
+
+        let slice = &bytes[1..];
+        let s = String::from_utf8_lossy(slice).into_owned();
+
+        println!("[{id}] Created room: {s}");
+        let mut rooms_lock = rooms.lock().await;
+        let len = rooms_lock.len() + 1;
+        rooms_lock.push(Room {
+            name: s,
+            users: vec![id],
+        });
+
+        *room = len as u32;
+        return true;
+    }
+    if packet_id == 2 {
+        if *room > 0 {
+            println!("[{id}] O_o Tried joining room while in room");
+            return false;
+        }
+
+        if packet_len == 1 {
+            println!("[{id}] O_o Tried joining empty room");
+            return false;
+        }
+
+        let slice = &bytes[1..];
+        let s = String::from_utf8_lossy(slice).into_owned();
+
+        println!("[{id}] Joined room: {s}");
+        return true;
+    }
+    return false;
+}
 
 #[allow(dead_code)]
 struct Room {
@@ -88,50 +139,12 @@ async fn main() {
                 if msg.is_binary() {
                     let bytes = msg.into_data();
                     if bytes.is_empty() {
+                        println!("[{id}] O_o Empty packet");
                         break;
                     }
 
-                    let packet_id = bytes[0];
-                    let packet_len = bytes.len();
-                    if packet_id == 1 {
-                        if room > 0 {
-                            println!("[{id}] O_o Tried creating room while in room");
-                            continue;
-                        }
-
-                        if packet_len == 1 {
-                            println!("[{id}] O_o Tried creating empty room");
-                            continue;
-                        }
-
-                        let slice = &bytes[1..];
-                        let s = String::from_utf8_lossy(slice).into_owned();
-
-                        println!("[{id}] Created room: {s}");
-                        let mut rooms_lock = rooms.lock().await;
-                        let len = rooms_lock.len() + 1;
-                        rooms_lock.push(Room {
-                            name: s,
-                            users: vec![id],
-                        });
-
-                        room = len;
-                    }
-                    if packet_id == 2 {
-                        if room > 0 {
-                            println!("[{id}] O_o Tried joining room while in room");
-                            continue;
-                        }
-
-                        if packet_len == 1 {
-                            println!("[{id}] O_o Tried joining empty room");
-                            continue;
-                        }
-
-                        let slice = &bytes[1..];
-                        let s = String::from_utf8_lossy(slice).into_owned();
-
-                        println!("[{id}] Joined room: {s}");
+                    if !packet_receive(id, &mut room, bytes, &rooms).await {
+                        write.send(Message::text("ERROR")).await.unwrap();
                     }
                 }
             }
