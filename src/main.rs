@@ -13,8 +13,7 @@ where
         if !metadata.is_text() {
             return false;
         }
-        let msg = metadata;
-        if let Message::Text(text) = msg {
+        if let Message::Text(text) = metadata {
             let lines: Vec<&str> = text.lines().collect();
 
             if lines.len() != 10 {
