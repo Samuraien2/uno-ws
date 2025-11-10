@@ -44,6 +44,18 @@ where
     false
 }
 
+async fn concat_room_names(rooms: &Arc<Mutex<Vec<Room>>>) -> String {
+    let rooms_lock = rooms.lock().await;
+
+    let mut result = String::new();
+    for room in rooms_lock.iter() {
+        result.push_str(&room.name);
+        result.push('\n');
+    }
+
+    result.trim_end().to_string()
+}
+
 async fn packet_receive(
     id: u32,
     room: &mut u32,
@@ -131,7 +143,8 @@ async fn main() {
                 return;
             }
 
-            write.send(Message::text(id.to_string())).await.unwrap();
+            let room_names = concat_room_names(&rooms).await;
+            write.send(Message::text(room_names)).await.unwrap();
 
             while let Some(msg) = read.next().await {
                 let msg = msg.unwrap();

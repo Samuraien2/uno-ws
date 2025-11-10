@@ -33,20 +33,32 @@ ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
 }
 
 ws.addEventListener("open", (ev) => {
-  log("Connected");
   if ("getBattery" in navigator) {
-    log("yup");
     navigator.getBattery().then((battery) => {
       sendTelemetry(Math.round(battery.level * 100), battery.charging + 0);
     });
   } else {
     sendTelemetry("?", "0");
   }
-
-  log("Successfully sent your data to china :)");
 });
 
+const received_room_names = false;
+
 ws.addEventListener("message", (ev) => {
+  if (!received_room_names) {
+    if (!ev.data) {
+      log("No rooms");
+      return;
+    }
+    const lines = ev.data.split("\n");
+    log("Rooms:");
+    for (let line of lines) {
+      log("- " + line);
+    }
+    received_room_names = true;
+    return;
+  }
+
   log("Received: " + ev.data);
 });
 
