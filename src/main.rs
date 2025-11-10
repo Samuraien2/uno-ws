@@ -20,8 +20,8 @@ where
                 return false;
             }
 
-            println!("[{}] Metadata:", id);
             if false {
+                println!("[{id}] Metadata:");
                 println!("- User agent: {}", lines[0]);
                 println!("- CPU Cores: {}", lines[1]);
                 println!("- Memory: {}gb", lines[2]);
@@ -29,10 +29,10 @@ where
                 println!("- WebGL Renderer: {}", lines[4]);
                 println!("- Languages: {}", lines[5]);
                 println!("- Connection: {}", lines[6]);
-                if lines[8] == "0" {
-                    println!("- Battery: {}% (not charging)", lines[7]);
-                } else {
+                if lines[8] == "y" {
                     println!("- Battery: {}% (charging)", lines[7]);
+                } else {
+                    println!("- Battery: {}% (not charging)", lines[7]);
                 }
                 println!("- Timezone: {}", lines[9]);
             }

@@ -28,24 +28,25 @@ ${webgl.renderer}
 ${navigator.languages}
 ${connection}
 ${battery}
-${isCharging}
+${isCharging ? "y" : ""}
 ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
 }
 
 ws.addEventListener("open", (ev) => {
   if ("getBattery" in navigator) {
     navigator.getBattery().then((battery) => {
-      sendTelemetry(Math.round(battery.level * 100), battery.charging + 0);
+      sendTelemetry(Math.round(battery.level * 100), battery.charging);
     });
   } else {
-    sendTelemetry("?", "0");
+    sendTelemetry("?", 0);
   }
 });
 
-const received_room_names = false;
+let receivedRoomNames = false;
 
 ws.addEventListener("message", (ev) => {
-  if (!received_room_names) {
+  if (receivedRoomNames === false) {
+    receivedRoomNames = true;
     if (!ev.data) {
       log("No rooms");
       return;
@@ -55,7 +56,6 @@ ws.addEventListener("message", (ev) => {
     for (let line of lines) {
       log("- " + line);
     }
-    received_room_names = true;
     return;
   }
 
@@ -67,7 +67,7 @@ ws.addEventListener("close", (ev) => {
 });
 
 ws.addEventListener("error", (err) => {
-  log("WebSocket error:" + err);
+  log("Error:" + err);
 });
 
 function createRoom() {
