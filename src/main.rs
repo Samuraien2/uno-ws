@@ -76,13 +76,13 @@ async fn packet_receive(
         }
 
         let slice = &bytes[1..];
-        let s = String::from_utf8_lossy(slice).into_owned();
+        let name = String::from_utf8_lossy(slice).into_owned();
 
-        println!("[{id}] Created room: {s}");
+        println!("[{id}] Created room: {name}");
         let mut rooms_lock = rooms.lock().await;
         let len = rooms_lock.len() + 1;
         rooms_lock.push(Room {
-            name: s,
+            name,
             users: vec![id],
         });
 
@@ -101,15 +101,22 @@ async fn packet_receive(
         }
 
         let slice = &bytes[1..];
-        let s = String::from_utf8_lossy(slice).into_owned();
+        let name = String::from_utf8_lossy(slice).into_owned();
 
-        println!("[{id}] Joined room: {s}");
-        return true;
+        let mut rooms_lock = rooms.lock().await;
+        for room in rooms_lock.iter_mut() {
+            if room.name == name {
+                println!("[{id}] Joined room: {name}");
+                room.users.push(id);
+                return true;
+            }
+        }
+        println!("[{id}] Tried joining invalid room: {name}");
+        return false;
     }
     return false;
 }
 
-#[allow(dead_code)]
 struct Room {
     name: String,
     users: Vec<u32>,
