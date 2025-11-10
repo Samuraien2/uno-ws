@@ -72,9 +72,8 @@ ws.addEventListener("error", (err) => {
 
 function createRoom() {
   const name = createRoomInput.value;
-  if (!name) {
-    return;
-  }
+  if (!name) return;
+
   const encoder = new TextEncoder();
   const stringBytes = encoder.encode(name);
   const bytes = new Uint8Array(1 + stringBytes.length);
