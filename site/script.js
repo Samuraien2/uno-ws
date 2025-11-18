@@ -7,8 +7,8 @@ function log(msg) {
 }
 
 const Packet = {
-  CREATE_ROOM: 1,
-  JOIN_ROOM: 2,
+  CREATE_ROOM: 0,
+  JOIN_ROOM: 1,
 };
 
 const ws = new WebSocket("ws://localhost:9001");
@@ -45,7 +45,7 @@ ws.addEventListener("open", (ev) => {
 let receivedRoomNames = false;
 
 ws.addEventListener("message", (ev) => {
-  if (receivedRoomNames === false) {
+  if (!receivedRoomNames) {
     receivedRoomNames = true;
     if (!ev.data) {
       log("No rooms");
@@ -59,15 +59,15 @@ ws.addEventListener("message", (ev) => {
     return;
   }
 
-  log("Received: " + ev.data);
+  log("Msg: " + ev.data);
 });
 
 ws.addEventListener("close", (ev) => {
-  log("Closed: " + ev.reason);
+  log("Close: " + ev.reason);
 });
 
 ws.addEventListener("error", (err) => {
-  log("Error:" + err);
+  log("Err:" + err);
 });
 
 function createRoom() {
