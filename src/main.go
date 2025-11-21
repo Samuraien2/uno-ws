@@ -154,6 +154,14 @@ func onPacket(id uint64, data []byte, packetID PacketID, room *string, conn *web
 	return true
 }
 
+func getConcatRooms() string {
+	var lines []string
+	for _, room := range state.rooms {
+		lines = append(lines, room.name)
+	}
+	return strings.Join(lines, "\n")
+}
+
 func onConnect(id uint64, conn *websocket.Conn) {
 	var room string
 
