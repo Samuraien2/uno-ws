@@ -24,6 +24,18 @@ var state = ServerState{
 	rooms: make(map[string]*Room),
 }
 
+type Connection struct {
+	conn   *websocket.Conn
+	inRoom bool
+}
+
+var connections = struct {
+	sync.RWMutex
+	conns map[uint64]*websocket.Conn
+}{
+	conns: make(map[uint64]*websocket.Conn),
+}
+
 var counter uint64
 
 var upgrader = websocket.Upgrader{
@@ -116,6 +128,17 @@ func leaveRoom(id uint64, roomName string) {
 	}
 }
 
+func broadcast(msg []byte) {
+	connections.RLock()
+	defer connections.RUnlock()
+
+	for id, conn := range connections.conns {
+		if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			fmt.Printf("[%d] Broadcast error: %v\n", id, err)
+		}
+	}
+}
+
 func onPacket(id uint64, data []byte, packetID PacketID, room *string, conn *websocket.Conn) bool {
 	switch packetID {
 	case CREATE_ROOM:
@@ -133,6 +156,8 @@ func onPacket(id uint64, data []byte, packetID PacketID, room *string, conn *web
 		if createRoom(id, roomName, conn) {
 			*room = roomName
 			fmt.Printf("[%d] Created room: %s\n", id, roomName)
+			roomNames := getConcatRooms()
+			broadcast([]byte(roomNames))
 		}
 	case JOIN_ROOM:
 		if *room != "" {
@@ -202,12 +227,19 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := atomic.AddUint64(&counter, 1) - 1
-
 	fmt.Printf("[%d] Connected\n", id)
 
-	onConnect(id, conn)
-	conn.Close()
+	connections.Lock()
+	connections.conns[id] = conn
+	connections.Unlock()
 
+	onConnect(id, conn)
+
+	connections.Lock()
+	delete(connections.conns, id)
+	connections.Unlock()
+
+	conn.Close()
 	fmt.Printf("[%d] Connection closed\n", id)
 }
 
