@@ -7,28 +7,35 @@ use tokio::sync::Mutex;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::{Bytes, Message};
 
-type RoomID = u32;
+// 0 = no room, 1.. = room id + 1
+type RoomID = usize;
 type UserID = u32;
 
-struct UserMeta {
-    user: UserID,
+struct User {
+    id: UserID,
     room: RoomID,
 }
 
 enum Packet {
     CreateRoom,
     JoinRoom,
-    Unknown(()),
+    Invalid,
 }
 
-type Users = Arc<Mutex<HashMap<UserID, UserMeta>>>;
+#[repr(u8)]
+enum SPacket {
+    Rooms,
+}
+
+type Users = Arc<Mutex<HashMap<UserID, User>>>;
+type Rooms = Arc<Mutex<Vec<Room>>>;
 
 // rust moment
 const fn packet_from_id(id: u8) -> Packet {
     match id {
         0 => Packet::CreateRoom,
         1 => Packet::JoinRoom,
-        _ => Packet::Unknown(()),
+        _ => Packet::Invalid,
     }
 }
 
@@ -37,7 +44,7 @@ struct Room {
     users: Vec<UserID>,
 }
 
-async fn concat_room_names(rooms: &Arc<Mutex<Vec<Room>>>) -> String {
+async fn concat_room_names(rooms: &Rooms) -> String {
     let rooms_lock = rooms.lock().await;
 
     let mut result = String::new();
@@ -48,23 +55,18 @@ async fn concat_room_names(rooms: &Arc<Mutex<Vec<Room>>>) -> String {
     result.trim_end().to_string()
 }
 
-async fn packet_receive(
-    id: UserID,
-    room: &mut usize,
-    bytes: Bytes,
-    rooms: &Arc<Mutex<Vec<Room>>>,
-) -> bool {
+async fn send_rooms()
+
+async fn packet_receive(user: &mut User, bytes: Bytes, rooms: &Rooms) -> bool {
     if bytes.is_empty() {
         return false;
     }
 
+    let id = user.id;
+
     match packet_from_id(bytes[0]) {
         Packet::CreateRoom => {
-            if *room > 0 {
-                return false;
-            }
-
-            if bytes.len() == 1 {
+            if user.room > 0 || bytes.len() == 1 {
                 return false;
             }
 
@@ -72,20 +74,17 @@ async fn packet_receive(
             let name = String::from_utf8_lossy(slice).into_owned();
 
             println!("[{id}] Created room: {name}");
+
             let mut rooms_lock = rooms.lock().await;
             rooms_lock.push(Room {
                 name,
                 users: vec![id],
             });
-            *room = rooms_lock.len();
+            user.room = rooms_lock.len();
             return true;
         }
         Packet::JoinRoom => {
-            if *room > 0 {
-                return false;
-            }
-
-            if bytes.len() == 1 {
+            if user.room > 0 || bytes.len() == 1 {
                 return false;
             }
 
@@ -100,10 +99,9 @@ async fn packet_receive(
                     return true;
                 }
             }
-
             return false;
         }
-        Packet::Unknown(_) => return false,
+        Packet::Invalid => return false,
     }
 }
 
@@ -114,28 +112,36 @@ async fn main() {
     let mut total_users_ever: UserID = 0;
     println!("Listening on ws://{addr}");
 
-    let rooms: Arc<Mutex<Vec<Room>>> = Arc::new(Mutex::new(Vec::new()));
+    let users: Users = Arc::new(Mutex::new(HashMap::new()));
+    let rooms: Rooms = Arc::new(Mutex::new(Vec::new()));
 
     while let Ok((stream, addr)) = listener.accept().await {
         total_users_ever += 1;
-        let id: UserID = total_users_ever;
+
         let rooms = Arc::clone(&rooms);
+        let users = Arc::clone(&users);
 
         tokio::spawn(async move {
             let ws_stream = accept_async(stream).await.unwrap();
-            let mut room_nr: usize = 0;
+            let room_nr: RoomID = 0;
+            let id: UserID = total_users_ever;
+            let user = &mut User { id, room: room_nr };
 
             println!("[{id}] New connection from {addr}");
 
             let (mut write, mut read) = ws_stream.split();
 
             let room_names = concat_room_names(&rooms).await;
-            write.send(Message::text(room_names)).await.unwrap();
+
+            let mut buf = Vec::with_capacity(1 + room_names.len());
+            buf.push(SPacket::Rooms as u8);
+            buf.extend_from_slice(room_names.as_bytes());
+            write.send(Message::Binary(buf.into())).await.unwrap();
 
             while let Some(msg) = read.next().await {
                 let msg = msg.unwrap();
                 if msg.is_binary() {
-                    if !packet_receive(id, &mut room_nr, msg.into_data(), &rooms).await {
+                    if !packet_receive(user, msg.into_data(), &rooms).await {
                         write.send(Message::text("Invalid packet")).await.unwrap();
                         println!("[{id}] O_o Invalid packet");
                     }

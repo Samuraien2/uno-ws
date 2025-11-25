@@ -7,39 +7,32 @@ function log(msg) {
 }
 
 const Packet = {
-  CREATE_ROOM: 0,
-  JOIN_ROOM: 1,
+  CreateRoom: 0,
+  JoinRoom: 1,
+};
+
+const SPacket = {
+  Rooms: 0,
 };
 
 const ws = new WebSocket("ws://localhost:9001");
 
 let receivedRoomNames = false;
 
-ws.addEventListener("message", (ev) => {
-  if (!receivedRoomNames) {
-    receivedRoomNames = true;
-    if (!ev.data) {
-      log("No rooms");
-      return;
-    }
-    const lines = ev.data.split("\n");
-    log("Rooms:");
-    for (let line of lines) {
-      log("- " + line);
-    }
-    return;
-  }
+ws.onmessage = async (ev) => {
+  const arrayBuffer = await ev.data.arrayBuffer();
+  const arr = new Uint8Array(arrayBuffer);
 
-  log("Msg: " + ev.data);
-});
+  log(arr);
+};
 
-ws.addEventListener("close", (ev) => {
-  log("Close: " + ev.reason);
-});
+ws.onclose = () => {
+  log("Connection closed");
+};
 
-ws.addEventListener("error", (err) => {
-  log("Err:" + err);
-});
+ws.onerror = () => {
+  log("Connection error");
+};
 
 function createRoom() {
   const name = createRoomInput.value;
@@ -48,7 +41,7 @@ function createRoom() {
   const encoder = new TextEncoder();
   const stringBytes = encoder.encode(name);
   const bytes = new Uint8Array(1 + stringBytes.length);
-  bytes[0] = Packet.CREATE_ROOM;
+  bytes[0] = Packet.CreateRoom;
   bytes.set(stringBytes, 1);
   ws.send(bytes);
 }
@@ -60,7 +53,7 @@ function joinRoom() {
   const encoder = new TextEncoder();
   const stringBytes = encoder.encode(name);
   const bytes = new Uint8Array(1 + stringBytes.length);
-  bytes[0] = Packet.JOIN_ROOM;
+  bytes[0] = Packet.JoinRoom;
   bytes.set(stringBytes, 1);
   ws.send(bytes);
 }
