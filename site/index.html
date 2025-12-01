@@ -3,18 +3,120 @@
     <head>
         <style>
             body {
+                font-family: monospace;
                 background-color: #181818;
                 color: #ccc;
+                position: fixed;
+            }
+
+            .container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+            }
+
+            output {
+                margin-top: 20px;
+                display: none;
+            }
+
+            button {
+                margin: 10px;
+                padding: 10px;
+                font-size: 16px;
+                cursor: pointer;
+                background: linear-gradient(45deg, #ff6b6b, #ff0059);
+                border: none;
+                color: white;
+                border-radius: 5px;
+            }
+
+            .title {
+                font-size: 32px;
+                margin-bottom: 20px;
+                color: white;
+                height: 70px;
+            }
+
+            input {
+                padding: 10px;
+                font-size: 16px;
+                border: 2px solid #444;
+                border-radius: 5px;
+                margin: 10px;
+                background-color: #222;
+                color: white;
+            }
+            
+            .content-wrapper {
+                display: flex;
+                flex-direction: row;
+                justify-content: center;
+                width: 60%;
+                max-width: 1200px;
+                gap: 20px;
+                padding-top: 15px;
+                padding-bottom: 15px;
+            }
+            
+            .align-left{
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                flex: 1;
+            }
+            .align-right{
+                display: flex;
+                flex-direction: column;
+                flex: 1;
+                align-items: center;
+            }
+            .align-right span{
+                margin-bottom: 10px;
+                font-weight: bold;
+                color: white;
+            }
+            .available-rooms-list-main{
+                border: 2px solid #444;
+                border-radius: 5px;
+                padding: 10px;
+                background-color: #222;
+                color: white;
+                max-height: 200px;
+                overflow-y: auto;
             }
         </style>
     </head>
     <body>
-        <button id="create-room" onclick="createRoom()">Create Room</button>
-        <input type="text" id="create-room-name" placeholder="Room name" />
-        <br />
-        <button id="join-room" onclick="joinRoom()">Join Room</button>
-        <input type="text" id="join-room-name" placeholder="Room name" />
-        <div id="output"></div>
+        <div class="container">
+            <span class="title" id="animatedElement">Uno Websocket</span>
+            <div id="output"></div>
+            <div class="content-wrapper">
+                <div class="align-left">
+                    <br><br>
+                    <input type="text" id="create-room-name" placeholder="Room name" />
+                    <button id="create-room" onclick="createRoom()">Create Room</button>
+                </div>
+                <div class="align-right">
+                    <span>available rooms!</span>
+                    <div class="available-rooms-list-main">
+                        placeholder for available rooms
+                        placeholder for available rooms
+                        placeholder for available rooms
+                        placeholder for available rooms
+                        placeholder for available rooms
+                        placeholder for available rooms
+                        placeholder for available rooms
+                        placeholder for available rooms
+                    </div>
+                </div>
+            </div>
+            <footer style="margin-top: 20px; font-size: 12px; color: #666;">
+                <span>Backend and game by Samuraien2 in group with Henrik & Mazen, UX help by syntaxMORG0</span>
+            </footer>
+        </div>
         <script src="script.js"></script>
     </body>
 </html>
