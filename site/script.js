@@ -66,3 +66,4 @@ function joinRoom() {
   bytes.set(stringBytes, 1);
   ws.send(bytes);
 }
+ 
