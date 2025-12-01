@@ -1,9 +1,11 @@
+use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
+use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::{Bytes, Message};
 
@@ -29,7 +31,6 @@ enum SPacket {
 
 type Users = Arc<Mutex<HashMap<UserID, User>>>;
 type Rooms = Arc<Mutex<Vec<Room>>>;
-
 // rust moment
 const fn packet_from_id(id: u8) -> Packet {
     match id {
@@ -44,20 +45,22 @@ struct Room {
     users: Vec<UserID>,
 }
 
-async fn concat_room_names(rooms: &Rooms) -> String {
-    let rooms_lock = rooms.lock().await;
+async fn get_rooms_msg(rooms: &Rooms) -> Message {
+    let names: Vec<String> = {
+        let guard = rooms.lock().await;
+        guard.iter().map(|r| r.name.clone()).collect()
+    };
 
-    let mut result = String::new();
-    for room in rooms_lock.iter() {
-        result.push_str(&room.name);
-        result.push('\n');
-    }
-    result.trim_end().to_string()
+    let joined = names.join("\n");
+
+    let mut buf = Vec::with_capacity(1 + joined.len());
+    buf.push(SPacket::Rooms as u8);
+    buf.extend_from_slice(joined.as_bytes());
+
+    Message::Binary(buf.into())
 }
 
-async fn send_rooms()
-
-async fn packet_receive(user: &mut User, bytes: Bytes, rooms: &Rooms) -> bool {
+async fn on_packet(user: &mut User, bytes: Bytes, rooms: &Rooms) -> bool {
     if bytes.is_empty() {
         return false;
     }
@@ -131,17 +134,12 @@ async fn main() {
 
             let (mut write, mut read) = ws_stream.split();
 
-            let room_names = concat_room_names(&rooms).await;
-
-            let mut buf = Vec::with_capacity(1 + room_names.len());
-            buf.push(SPacket::Rooms as u8);
-            buf.extend_from_slice(room_names.as_bytes());
-            write.send(Message::Binary(buf.into())).await.unwrap();
+            write.send(get_rooms_msg(&rooms).await).await.unwrap();
 
             while let Some(msg) = read.next().await {
                 let msg = msg.unwrap();
                 if msg.is_binary() {
-                    if !packet_receive(user, msg.into_data(), &rooms).await {
+                    if !on_packet(user, msg.into_data(), &rooms).await {
                         write.send(Message::text("Invalid packet")).await.unwrap();
                         println!("[{id}] O_o Invalid packet");
                     }

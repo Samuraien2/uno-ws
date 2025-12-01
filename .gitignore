@@ -1,2 +1,3 @@
 *.exe
 /rs/target
+/target

@@ -15,6 +15,8 @@ const SPacket = {
   Rooms: 0,
 };
 
+let rooms = [];
+
 const ws = new WebSocket("ws://localhost:9001");
 
 let receivedRoomNames = false;
@@ -22,8 +24,15 @@ let receivedRoomNames = false;
 ws.onmessage = async (ev) => {
   const arrayBuffer = await ev.data.arrayBuffer();
   const arr = new Uint8Array(arrayBuffer);
-
-  log(arr);
+  const packet_id = arr[0];
+  if (packet_id === SPacket.Rooms) {
+    let rooms_data = arr.subarray(1);
+    const decoder = new TextDecoder("utf-8");
+    const text = decoder.decode(rooms_data);
+    const rooms = text.split("\n");
+    log("ROOMS:");
+    log(rooms);
+  }
 };
 
 ws.onclose = () => {
