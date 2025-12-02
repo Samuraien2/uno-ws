@@ -12,10 +12,18 @@ use tokio_tungstenite::tungstenite::{Bytes, Message};
 // 0 = no room, 1.. = room id + 1
 type RoomID = usize;
 type UserID = u32;
+type Write = Mutex<SplitSink<WebSocketStream<TcpStream>, Message>>;
+type Users = Arc<Mutex<HashMap<UserID, User>>>;
+type Rooms = Arc<Mutex<Vec<Room>>>;
 
 struct User {
     id: UserID,
     room: RoomID,
+}
+
+struct Connection {
+    user: User,
+    write: Write,
 }
 
 enum Packet {
@@ -29,8 +37,11 @@ enum SPacket {
     Rooms,
 }
 
-type Users = Arc<Mutex<HashMap<UserID, User>>>;
-type Rooms = Arc<Mutex<Vec<Room>>>;
+struct Room {
+    name: String,
+    users: Vec<Connection>,
+}
+
 // rust moment
 const fn packet_from_id(id: u8) -> Packet {
     match id {
@@ -38,11 +49,6 @@ const fn packet_from_id(id: u8) -> Packet {
         1 => Packet::JoinRoom,
         _ => Packet::Invalid,
     }
-}
-
-struct Room {
-    name: String,
-    users: Vec<UserID>,
 }
 
 async fn get_rooms_msg(rooms: &Rooms) -> Message {
@@ -60,30 +66,31 @@ async fn get_rooms_msg(rooms: &Rooms) -> Message {
     Message::Binary(buf.into())
 }
 
-async fn on_packet(user: &mut User, bytes: Bytes, rooms: &Rooms) -> bool {
+async fn on_packet(uid: UserID, bytes: Bytes, users: &Users, rooms: &Rooms) -> bool {
     if bytes.is_empty() {
         return false;
     }
 
-    let id = user.id;
+    let mut users_lock = users.lock().await;
+    let conn = users_lock.get_mut(&uid).unwrap();
 
     match packet_from_id(bytes[0]) {
         Packet::CreateRoom => {
-            if user.room > 0 || bytes.len() == 1 {
+            if conn.room > 0 || bytes.len() == 1 {
                 return false;
             }
 
             let slice = &bytes[1..];
             let name = String::from_utf8_lossy(slice).into_owned();
 
-            println!("[{id}] Created room: {name}");
+            println!("[{uid}] Created room: {name}");
 
             let mut rooms_lock = rooms.lock().await;
             rooms_lock.push(Room {
                 name,
-                users: vec![id],
+                users: vec![uid],
             });
-            user.room = rooms_lock.len();
+            conn.room = rooms_lock.len();
             return true;
         }
         Packet::JoinRoom => {
@@ -98,7 +105,7 @@ async fn on_packet(user: &mut User, bytes: Bytes, rooms: &Rooms) -> bool {
             for room in rooms_lock.iter_mut() {
                 if room.name == name {
                     println!("[{id}] Joined room: {name}");
-                    room.users.push(id);
+                    room.users.push(conn);
                     return true;
                 }
             }
@@ -128,19 +135,21 @@ async fn main() {
             let ws_stream = accept_async(stream).await.unwrap();
             let room_nr: RoomID = 0;
             let id: UserID = total_users_ever;
-            let user = &mut User { id, room: room_nr };
+            let (write, mut read) = ws_stream.split();
+            let conn = &mut Connection {
+                user: User { id, room: room_nr },
+                write: write,
+            };
 
             println!("[{id}] New connection from {addr}");
 
-            let (mut write, mut read) = ws_stream.split();
-
-            write.send(get_rooms_msg(&rooms).await).await.unwrap();
+            conn.write.send(get_rooms_msg(&rooms).await).await.unwrap();
 
             while let Some(msg) = read.next().await {
                 let msg = msg.unwrap();
                 if msg.is_binary() {
-                    if !on_packet(user, msg.into_data(), &rooms).await {
-                        write.send(Message::text("Invalid packet")).await.unwrap();
+                    if !on_packet(conn, msg.into_data(), &rooms).await {
+                        conn.write.send(Message::text("Error")).await.unwrap();
                         println!("[{id}] O_o Invalid packet");
                     }
                 }
@@ -150,12 +159,12 @@ async fn main() {
                 let mut rooms_lock = rooms.lock().await;
                 let room_idx = room_nr - 1;
                 let room = rooms_lock.get_mut(room_idx).unwrap();
-                if room.users[0] == id {
+                if room.users[0].user.id == id {
                     println!("[{id}] Is owner :O");
                     rooms_lock.remove(room_idx);
                 } else {
                     println!("[{id}] Is member :)");
-                    if let Some(pos) = room.users.iter().position(|&x| x == id) {
+                    if let Some(pos) = room.users.iter().position(|&x| x.user.id == id) {
                         room.users.remove(pos);
                     }
                 }

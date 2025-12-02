@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>UNO EXTREME</title>
+<style>
+body {
+    background-color: #181818;
+    color: #ccc;
+    font-family: monospace;
+}
+</style>
+</head>
+<body>
+<input type="text" id="create-room-name" placeholder="Room name" />
+<button id="create-room" onclick="createRoom()">Create Room</button>
+<div id="output"></div>
+<script>
+function log(msg) {
+  output.innerText += msg + "\n";
+}
+
+const ws = new WebSocket("ws://localhost:9001");
+ws.onopen = () => {
+  console.log("WE IN BOYS");
+};
+
+ws.onmessage = () => {
+  console.log("MESSAGE!!");
+};
+
+ws.onclose = () => {
+  console.log("Connection closed");
+};
+
+ws.onerror = () => {
+  console.log("Connection error");
+};
+</script>
+</body>
+</html>
