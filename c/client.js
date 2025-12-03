@@ -15,7 +15,6 @@ ws.on("message", (data) => {
 
 ws.on("ping", () => {
   console.log("Received ping from server");
-  // Node.js ws automatically replies with pong
 });
 
 ws.on("pong", () => {

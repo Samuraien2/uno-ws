@@ -104,7 +104,7 @@ async fn on_packet(uid: UserID, bytes: Bytes, users: &Users, rooms: &Rooms) -> b
             let mut rooms_lock = rooms.lock().await;
             for room in rooms_lock.iter_mut() {
                 if room.name == name {
-                    println!("[{id}] Joined room: {name}");
+                    println!("[{uid}] Joined room: {name}");
                     room.users.push(conn);
                     return true;
                 }
