@@ -1,109 +1,100 @@
-#include <libwebsockets.h>
+#include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdatomic.h>
+#include "ws/ws.h"
 
-#define PING_INTERVAL 5 // seconds
+#define MAX_CONNECTIONS 20
+#define MAX_ROOMS 20
+#define MAX_USERS_IN_ROOM 8
 
-typedef struct PerSessionData {
-    time_t last_pong;
-} PerSessionData;
+typedef enum {
+    PACKET_CREATE_ROOM,
+    PACKET_JOIN_ROOM,
 
-static int callback_echo(
-    struct lws *wsi,
-    enum lws_callback_reasons reason,
-    void *user,
-    void *in,
-    size_t len
-) {
-    PerSessionData *pss = (PerSessionData*)user;
+    PACKET_SEND_ROOMS = 50,
+} Packet;
 
-    switch (reason) {
-        case LWS_CALLBACK_LOCK_POLL:
-            //printf("LWS_CALLBACK_LOCK_POLL\n");
-            break;
-        case LWS_CALLBACK_ADD_POLL_FD:
-            //printf("LWS_CALLBACK_ADD_POLL_FD\n");
-            break;
-        case LWS_CALLBACK_UNLOCK_POLL:
-            //printf("LWS_CALLBACK_UNLOCK_POLL\n");
-            break;
-        case LWS_CALLBACK_GET_THREAD_ID:
-            //printf("LWS_CALLBACK_GET_THREAD_ID\n");
-            break;
-        case LWS_CALLBACK_PROTOCOL_INIT:
-            //printf("LWS_CALLBACK_PROTOCOL_INIT\n");
-            break;
-        case LWS_CALLBACK_EVENT_WAIT_CANCELLED:
-            //printf("LWS_CALLBACK_EVENT_WAIT_CANCELLED\n");
-            break;
-        case LWS_CALLBACK_CHANGE_MODE_POLL_FD:
-            //printf("LWS_CALLBACK_CHANGE_MODE_POLL_FD\n");
-            break;
-        case LWS_CALLBACK_ESTABLISHED:
-            printf("New client connected!\n");
-            lws_callback_on_writable(wsi);
-            break;
+typedef struct {
+    const char *name;
+    int room;
+} User;
 
-        case LWS_CALLBACK_RECEIVE:
-            printf("RECEIVED DATA!\n");
-            break;
-        case LWS_CALLBACK_RECEIVE_PONG:
-            printf("PONG\n");
-            break;
-        case LWS_CALLBACK_SERVER_WRITEABLE: {
-            time_t now = time(NULL);
+typedef struct {
+    const char *name;
+    int userIDs[MAX_USERS_IN_ROOM];
+} Room;
 
-            // Send a ping every PING_INTERVAL seconds
-            if (now - pss->last_pong >= PING_INTERVAL) {
-                printf("Sending ping to client...\n");
-                unsigned char buf[LWS_PRE + 0]; // empty payload, still need LWS_PRE
-                unsigned char *p = &buf[LWS_PRE];
-                lws_write(wsi, p, 0, LWS_WRITE_PING);
-                pss->last_pong = now;
-            }
+// ONLY ACCESSED VIA LOCK!
+User *users[MAX_CONNECTIONS] = {};
+Room *rooms[MAX_ROOMS] = {};
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
-            // schedule next check
-            lws_callback_on_writable(wsi);
+// returns id
+void rooms_add(Room *room, int owner_user_id) {
+    room->userIDs[0] = owner_user_id;
+    pthread_mutex_lock(&lock);
+    int free_room = 0;
+    for (int i = 0; i < MAX_ROOMS; i++) {
+        if (rooms[i] == NULL) {
+            free_room = i;
             break;
         }
-        case LWS_CALLBACK_CLOSED:
-        case LWS_CALLBACK_CLOSED_CLIENT_HTTP:
-        case LWS_CALLBACK_CLIENT_CLOSED:
-            printf("Client disconnected.\n");
-            break;
-        default:
-            printf("BREH %p %lu %p %p %d\n", wsi, len, user, in, reason);
-            break;
     }
-    return 0;
+    rooms[free_room] = room;
+    users[owner_user_id]->room = free_room;
+
+    pthread_mutex_unlock(&lock);
 }
 
-static struct lws_protocols protocols[] = {
-    {
-        .name = "echo-protocol",
-        .callback = callback_echo,
-        .per_session_data_size = sizeof(PerSessionData),
-    },
-    { NULL, NULL, 0, 0 }
-};
+void on_event(WsEvent *event) {
+    WsEvent e = *event;
+    if (e.type == WS_EVENT_BINARY_MESSAGE) {
+        uint8_t *bytes = e.msg.bytes;
+        uint64_t len = e.msg.len;
 
-int main(void)
-{
-    struct lws_context_creation_info info = {
-        .port = 9001,
-        .protocols = protocols,
-        .options = LWS_SERVER_OPTION_DISABLE_IPV6
-    };
+        printf("[");
+        for (int i = 0; i < len; i++) {
+            printf("%d,", bytes[i]);
+        }
+        printf("]\n");
 
-    struct lws_context *context = lws_create_context(&info);
-    if (!context) {
-        fprintf(stderr, "failed to create context\n");
+        if (bytes[0] == PACKET_CREATE_ROOM) {
+            int name_len = len - 1;
+
+            char *name = malloc(len);
+            if (!name) exit(67);
+            for (int i = 0; i < name_len; i++) {
+                name[i] = bytes[i+1];
+            }
+            name[name_len] = '\0';
+
+            printf("Creating room: %s\n", name);
+
+            Room *room = malloc(sizeof(Room));
+            if (!room) exit(67);
+            room->name = name;
+            rooms_add(room, e.msg.user_id);
+        }
+    }
+    else if (e.type == WS_EVENT_CONNECT) {
+        printf("%d connected\n", e.conn.user_id);
+    }
+    else if (e.type == WS_EVENT_DISCONNECT) {
+        printf("%d disconnected\n", e.conn.user_id);
+    }
+}
+
+int main() {
+    WsState *ws = ws_listen(9001);
+    if (!ws) {
+        printf("Failed lol\n");
         return 1;
     }
+    printf("Server listening on port 9001...\n");
 
-    while (1) {
-        lws_service(context, 100);
-    }
+    ws_loop(ws, on_event);
 
-    lws_context_destroy(context);
+    ws_close(ws);
     return 0;
 }

@@ -1,8 +1,5 @@
 all:
-	cc src/*.c src/cws/*.c -o main -Wall -Wextra -g -fsanitize=address -fno-omit-frame-pointer
-
-old:
-	cc main.c -o main -lwebsockets
+	cc main.c ws/ws.c -o main
 
 r: all
 	./main

@@ -35,6 +35,19 @@ ws.onclose = () => {
 ws.onerror = () => {
   console.log("Connection error");
 };
+
+function createRoom() {
+  const name = createRoomInput.value;
+  if (!name) return;
+
+  const encoder = new TextEncoder();
+  const stringBytes = encoder.encode(name);
+  const bytes = new Uint8Array(1 + stringBytes.length);
+  bytes[0] = Packet.CreateRoom;
+  bytes.set(stringBytes, 1);
+  ws.send(bytes);
+}
+
 </script>
 </body>
 </html>
